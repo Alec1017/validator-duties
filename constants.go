@@ -9,4 +9,7 @@ const (
 
 	// Number of seconds per beacon slot
 	SecondsPerSlot = 12
+
+	// Timestamp of the beacon chain genesis
+	BeaconChainGenesis = 1606824023
 )
