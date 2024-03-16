@@ -1,4 +1,4 @@
-package main
+package duties
 
 const (
 	// URL of the consensus client to connect to

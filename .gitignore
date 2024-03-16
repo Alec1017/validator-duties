@@ -1,1 +1,5 @@
+# ignore the binary
 validator-duties
+
+# dont ignore the folder
+!validator-duties/
