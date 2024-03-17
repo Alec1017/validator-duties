@@ -16,68 +16,95 @@ type EpochSlot struct {
 }
 
 type ValidatorDuties struct {
-	EpochSlots []EpochSlot
-	Validator  uint64
+	Timezone           *time.Location
+	BeaconNodeEndpoint string
+	EpochSlots         []EpochSlot
+	Validator          uint64
 }
 
 // Create a new instance of validator duties
-func New(validator uint64) *ValidatorDuties {
+func New(opts ...Option) (*ValidatorDuties, error) {
 	// Create a new validator duties struct
-	validatorDuties := &ValidatorDuties{
-		Validator:  validator,
-		EpochSlots: []EpochSlot{},
+	validatorDuties := &ValidatorDuties{}
+
+	// Process all options
+	for _, opt := range opts {
+		if err := opt(validatorDuties); err != nil {
+			return nil, err
+		}
 	}
 
-	return validatorDuties
+	return validatorDuties, nil
 }
 
 // Processes an attester duty response
-func (d *ValidatorDuties) ProcessDuties(epoch uint64) {
+func (d *ValidatorDuties) ProcessDuties(epoch uint64) error {
 	// Query the attester duties from the beacon node
-	epochDuties := QueryAttesterDuties(epoch, d.Validator)
+	epochDuties, err := d.QueryAttesterDuties(epoch)
+	if err != nil {
+		return err
+	}
 
 	// Pull out the data from the response
 	for _, epochData := range epochDuties.Data {
 		// add the slot for the validator
 		d.EpochSlots = append(d.EpochSlots, EpochSlot{epochData.Slot, epoch})
 	}
+
+	return nil
 }
 
 // Queries the head block of the beacon chain
-func QueryBeaconHeadBlock() SignedBeaconBlockResponse {
+func (d *ValidatorDuties) QueryBeaconHeadBlock() (*SignedBeaconBlockResponse, error) {
 	// Signed beacon block response
 	var signedBeaconBlock SignedBeaconBlockResponse
 
 	// Request the head block of the beacon chain
-	err := GetRequest("beacon/headers/head", &signedBeaconBlock)
+	err := GetRequest(d.BeaconNodeEndpoint+"/eth/v1/beacon/headers/head", &signedBeaconBlock)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	return signedBeaconBlock
+	return &signedBeaconBlock, nil
 }
 
 // Queries the duties of the attester for a given epoch
-func QueryAttesterDuties(epoch uint64, validator uint64) AttesterDutiesResponse {
+func (d *ValidatorDuties) QueryAttesterDuties(epoch uint64) (*AttesterDutiesResponse, error) {
 	// Attester duties response
 	var epochDuties AttesterDutiesResponse
 
 	// Request the attester duties for the epoch
 	err := PostRequest(
-		fmt.Sprintf("validator/duties/attester/%d", epoch),
+		fmt.Sprintf(d.BeaconNodeEndpoint+"/eth/v1/validator/duties/attester/%d", epoch),
 		&epochDuties,
-		[]uint64{validator},
+		[]uint64{d.Validator},
 	)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	return epochDuties
+	return &epochDuties, nil
 }
 
-func Start(*cli.Context) error {
+func Start(ctx *cli.Context) error {
+	// Load CLI flags
+	flagOptions, err := FlagOptions(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Create a validator duties manager with the validator whose duties should
+	// be retrieved
+	dutiesManager, err := New(flagOptions...)
+	if err != nil {
+		return err
+	}
+
 	// Get the head block of the beacon chain
-	headBeaconBlock := QueryBeaconHeadBlock()
+	headBeaconBlock, err := dutiesManager.QueryBeaconHeadBlock()
+	if err != nil {
+		return err
+	}
 
 	// Get the current slot
 	currentSlot := headBeaconBlock.Data.Header.Message.Slot
@@ -85,20 +112,13 @@ func Start(*cli.Context) error {
 	// Determine current epoch using current slot
 	currentEpoch := currentSlot / SlotsPerEpoch
 
-	// Create a validator duties manager with the validator whose duties should
-	// be retrieved
-	dutiesManager := New(811475)
-
 	// Process the duties for the current epoch and the next epoch
 	dutiesManager.ProcessDuties(currentEpoch)
 	dutiesManager.ProcessDuties(currentEpoch + 1)
 
-	// Load the specified timezone. Default to UTC
-	loc, _ := time.LoadLocation("America/New_York")
-
 	// The timestamp where the previous attestion ended. At the start, it will just be
 	// the current time.
-	prevAttestEnd := time.Now().In(loc)
+	prevAttestEnd := time.Now().In(dutiesManager.Timezone)
 
 	// Display the validator
 	fmt.Printf("Validator: %s\n", strconv.Itoa(int(dutiesManager.Validator)))

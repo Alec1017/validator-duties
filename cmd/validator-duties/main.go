@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"os"
 
 	"github.com/Alec1017/validator-duties/cmd"
@@ -26,6 +27,6 @@ func main() {
 
 	// Kick off the app
 	if err := app.Run(os.Args); err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 }
