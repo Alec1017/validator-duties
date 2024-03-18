@@ -14,7 +14,7 @@ func main() {
 	app := cli.App{}
 	app.Name = "validator-duties"
 	app.Usage = "CLI that allows you to check the upcoming epochs for gaps between attestations. Useful for maintenance of the validator."
-	app.Version = "0.0.1"
+	app.Version = "0.1.0"
 	app.Flags = cmd.Flags
 	app.Action = func(ctx *cli.Context) error {
 		// Execute the app logic
