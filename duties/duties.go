@@ -5,8 +5,6 @@ import (
 	"math"
 	"strconv"
 	"time"
-
-	"github.com/urfave/cli/v2"
 )
 
 // Simple wrapper struct for an epoch/slot pair
@@ -86,16 +84,10 @@ func (d *ValidatorDuties) QueryAttesterDuties(epoch uint64) (*AttesterDutiesResp
 	return &epochDuties, nil
 }
 
-func Start(ctx *cli.Context) error {
-	// Load CLI flags
-	flagOptions, err := FlagOptions(ctx)
-	if err != nil {
-		return err
-	}
-
+func Start(opts ...Option) error {
 	// Create a validator duties manager with the validator whose duties should
 	// be retrieved
-	dutiesManager, err := New(flagOptions...)
+	dutiesManager, err := New(opts...)
 	if err != nil {
 		return err
 	}
