@@ -26,5 +26,5 @@ validator-duties [global options]
 ### Flags
 
 - `--validator`: Index of the validator to get duties for.
-- `--timezone`: Timezone for displaying timestamps. 
-- `--beacon-node-endpoint`: Endpoint URL for the beacon node API.
+- `--timezone`: Timezone for displaying timestamps. (default: "UTC")
+- `--beacon-node-endpoint`: Endpoint URL for the beacon node API. (default: "http://localhost:5052")
