@@ -17,9 +17,9 @@ type ValidatorDutyEpoch struct {
 
 type ValidatorDuties struct {
 	Timezone           *time.Location
-	BeaconNodeEndpoint string
 	CurrEpochDuties    *ValidatorDutyEpoch
 	NextEpochDuties    *ValidatorDutyEpoch
+	BeaconNodeEndpoint string
 	Validator          uint64
 }
 
