@@ -44,7 +44,23 @@ type AttesterDuty struct {
 }
 
 type AttesterDutiesResponse struct {
-	DependentRoot       string         `json:"dependent_root"`
-	Data                []AttesterDuty `json:"data"`
-	ExecutionOptimistic bool           `json:"execution_optimistic"`
+	DependentRoot       string          `json:"dependent_root"`
+	Data                []*AttesterDuty `json:"data"`
+	ExecutionOptimistic bool            `json:"execution_optimistic"`
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+//									Proposer Duties									   //
+/////////////////////////////////////////////////////////////////////////////////////////
+
+type ProposerDuty struct {
+	Pubkey         string `json:"pubkey"`
+	ValidatorIndex uint64 `json:"validator_index,string"`
+	Slot           uint64 `json:"slot,string"`
+}
+
+type ProposerDutiesResponse struct {
+	DependentRoot       string          `json:"dependent_root"`
+	Data                []*ProposerDuty `json:"data"`
+	ExecutionOptimistic bool            `json:"execution_optimistic"`
 }
