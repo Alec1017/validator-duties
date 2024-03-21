@@ -64,3 +64,19 @@ type ProposerDutiesResponse struct {
 	Data                []*ProposerDuty `json:"data"`
 	ExecutionOptimistic bool            `json:"execution_optimistic"`
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////
+//								Sync Committee Duties								   //
+/////////////////////////////////////////////////////////////////////////////////////////
+
+type SyncCommitteeDuty struct {
+	Pubkey                        string   `json:"pubkey"`
+	ValidatorSyncCommitteeIndices []string `json:"validator_sync_committee_indices"`
+	ValidatorIndex                uint64   `json:"validator_index,string"`
+}
+
+type SyncCommitteeDutiesResponse struct {
+	DependentRoot       string               `json:"dependent_root"`
+	Data                []*SyncCommitteeDuty `json:"data"`
+	ExecutionOptimistic bool                 `json:"execution_optimistic"`
+}

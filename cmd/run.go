@@ -13,7 +13,7 @@ func Run() {
 	app := cli.App{}
 	app.Name = "validator-duties"
 	app.Usage = "CLI that allows you to check the upcoming epochs for gaps between attestations. Useful for maintenance of the validator."
-	app.Version = "0.1.1"
+	app.Version = "0.1.2"
 	app.Flags = Flags
 	app.Action = validatorDuties
 

@@ -10,9 +10,10 @@ import (
 
 // Contains the duties of a validator for a given epoch
 type ValidatorDutyEpoch struct {
+	ProposalSlots   []uint64
 	AttestationSlot uint64
-	ProposalSlot    uint64
 	Epoch           uint64
+	SyncCommittee   bool
 }
 
 type ValidatorDuties struct {
@@ -58,24 +59,53 @@ func (d *ValidatorDuties) ProcessAttesterDuties(epoch uint64) (uint64, error) {
 }
 
 // Processes a proposer duty response
-func (d *ValidatorDuties) ProcessProposerDuties(epoch uint64) (uint64, error) {
+func (d *ValidatorDuties) ProcessProposerDuties(epoch uint64) ([]uint64, error) {
+	// Define an empty proposal slots array
+	proposalSlots := make([]uint64, 0)
+
 	// Query the proposer duties from the beacon node
 	proposerDuties, err := d.QueryProposerDuties(epoch)
 	if err != nil {
-		return 0, err
+		return proposalSlots, err
 	}
 
 	// Pull out the data from the response
 	for _, proposerData := range proposerDuties.Data {
 		// Only pull out the slot if ithe validator index matches
 		if d.Validator == proposerData.ValidatorIndex {
-			proposalSlot := proposerDuties.Data[0].Slot
-
-			return proposalSlot, nil
+			// Append the slot
+			proposalSlots = append(proposalSlots, proposerDuties.Data[0].Slot)
 		}
 	}
 
-	return 0, nil
+	return proposalSlots, nil
+}
+
+// Processes sync committee duty response
+func (d *ValidatorDuties) ProcessSyncCommitteeDuties(epoch uint64) (bool, error) {
+	// Query the sync committee duties from the beacon node
+	syncCommitteeDuties, err := d.QuerySyncCommitteeDuties(epoch)
+	if err != nil {
+		return false, err
+	}
+
+	fmt.Println(syncCommitteeDuties)
+	// No sync committee duties found for this epoch
+	if len(syncCommitteeDuties.Data) == 0 {
+		return false, nil
+	}
+
+	// Ensure that the data response is only of size 1
+	if len(syncCommitteeDuties.Data) != 1 {
+		return false, errors.New("should have received only 1 sync committee duty response")
+	}
+
+	// Ensure the response is for the correct validator
+	if d.Validator != syncCommitteeDuties.Data[0].ValidatorIndex {
+		return false, errors.New("received sync committee response for the wrong validator")
+	}
+
+	return true, nil
 }
 
 // Queries the head block of the beacon chain
@@ -127,15 +157,41 @@ func (d *ValidatorDuties) QueryProposerDuties(epoch uint64) (*ProposerDutiesResp
 	return &proposerDuties, nil
 }
 
+// Queries the sync committee duties for a given epoch
+func (d *ValidatorDuties) QuerySyncCommitteeDuties(
+	epoch uint64,
+) (*SyncCommitteeDutiesResponse, error) {
+	// Sync committee duties response
+	var epochDuties SyncCommitteeDutiesResponse
+
+	// Request the sync committee duties for the epoch
+	err := PostRequest(
+		fmt.Sprintf(d.BeaconNodeEndpoint+"/eth/v1/validator/duties/sync/%d", epoch),
+		&epochDuties,
+		[]uint64{d.Validator},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &epochDuties, nil
+}
+
 func (d *ValidatorDuties) DisplayDuties() {
 	// The timestamp where the previous attestion ended. At the start, it will just be
 	// the current time.
 	prevAttestEnd := time.Now().In(d.Timezone)
 
 	// Display the validator
-	fmt.Printf("Validator: %s\n", strconv.Itoa(int(d.Validator)))
+	fmt.Println("-------------------------------------------------------------------------")
+	fmt.Printf(
+		"|                          Validator: %s                            |\n",
+		strconv.Itoa(int(d.Validator)),
+	)
+	fmt.Print("-------------------------------------------------------------------------\n\n")
+	fmt.Println("----------------------------- Attestations ------------------------------")
 
-	// For each slot in the mapping, get the timestamp of the slot start
+	// Loop through the current epoch and the next epoch
 	for _, epochDuties := range []*ValidatorDutyEpoch{d.CurrEpochDuties, d.NextEpochDuties} {
 		// Determine the timestamp the attestation slot started
 		slotStart := time.Unix(
@@ -169,6 +225,42 @@ func (d *ValidatorDuties) DisplayDuties() {
 
 		// Set the previous attestion time
 		prevAttestEnd = slotStart
+	}
+
+	fmt.Println("\n------------------------------ Proposals --------------------------------")
+
+	// Loop through the current epoch and the next epoch
+	for _, epochDuties := range []*ValidatorDutyEpoch{d.CurrEpochDuties, d.NextEpochDuties} {
+		// Display output if proposals were found
+		if len(epochDuties.ProposalSlots) > 0 {
+			fmt.Printf(
+				"epoch %d - WARNING: at least one proposal is schedule in this epoch!\n",
+				epochDuties.Epoch,
+			)
+		} else {
+			fmt.Printf(
+				"epoch %d - not proposing any blocks in this epoch \n",
+				epochDuties.Epoch,
+			)
+		}
+	}
+
+	fmt.Println("\n---------------------------- Sync Committee -----------------------------")
+
+	// Loop through the current epoch and the next epoch
+	for _, epochDuties := range []*ValidatorDutyEpoch{d.CurrEpochDuties, d.NextEpochDuties} {
+		// Display output if sync committee duties were found
+		if epochDuties.SyncCommittee {
+			fmt.Printf(
+				"epoch %d - WARNING: validator is part of a sync committee!\n",
+				epochDuties.Epoch,
+			)
+		} else {
+			fmt.Printf(
+				"epoch %d - not part of a sync committee in this epoch \n",
+				epochDuties.Epoch,
+			)
+		}
 	}
 }
 
@@ -205,13 +297,25 @@ func Start(opts ...Option) error {
 	}
 
 	// Process the proposer duties for the current epoch
-	currEpochProposerDutySlot, err := d.ProcessProposerDuties(currentEpoch)
+	currEpochProposerDutySlots, err := d.ProcessProposerDuties(currentEpoch)
 	if err != nil {
 		return err
 	}
 
 	// Process the proposer duties for the next epoch
-	nextEpochProposerDutySlot, err := d.ProcessProposerDuties(currentEpoch + 1)
+	nextEpochProposerDutySlots, err := d.ProcessProposerDuties(currentEpoch + 1)
+	if err != nil {
+		return err
+	}
+
+	// Process the sync committee duties for the current epoch
+	currEpochSyncCommitteeDuty, err := d.ProcessSyncCommitteeDuties(currentEpoch)
+	if err != nil {
+		return err
+	}
+
+	// Process the sync committee duties for the next epoch
+	nextEpochSyncCommitteeDuty, err := d.ProcessSyncCommitteeDuties(currentEpoch + 1)
 	if err != nil {
 		return err
 	}
@@ -220,14 +324,16 @@ func Start(opts ...Option) error {
 	d.CurrEpochDuties = &ValidatorDutyEpoch{
 		Epoch:           currentEpoch,
 		AttestationSlot: currEpochAttesterDutySlot,
-		ProposalSlot:    currEpochProposerDutySlot,
+		ProposalSlots:   currEpochProposerDutySlots,
+		SyncCommittee:   currEpochSyncCommitteeDuty,
 	}
 
 	// Set the next epoch duties
 	d.NextEpochDuties = &ValidatorDutyEpoch{
 		Epoch:           currentEpoch + 1,
 		AttestationSlot: nextEpochAttesterDutySlot,
-		ProposalSlot:    nextEpochProposerDutySlot,
+		ProposalSlots:   nextEpochProposerDutySlots,
+		SyncCommittee:   nextEpochSyncCommitteeDuty,
 	}
 
 	// Display the output
