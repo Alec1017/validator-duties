@@ -89,7 +89,6 @@ func (d *ValidatorDuties) ProcessSyncCommitteeDuties(epoch uint64) (bool, error)
 		return false, err
 	}
 
-	fmt.Println(syncCommitteeDuties)
 	// No sync committee duties found for this epoch
 	if len(syncCommitteeDuties.Data) == 0 {
 		return false, nil
